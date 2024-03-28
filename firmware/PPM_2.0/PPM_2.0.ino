@@ -14,18 +14,24 @@
 #define RGB_RED_PIN 5
 #define RGB_GREEN_PIN 6
 #define RGB_BLUE_PIN 9
-#define HEATING_TIME 30000
+#define HEATING_TIME 120000
 #define TOTAL_CAL_COUNT 120
 #define R0_EEPROM_ADDR 4
 
-float A = 110.9169;
-float B = -2.715707;
+float CO2A = 110.9169;   // 110.5422
+float CO2B = -2.715707;  // -2.748542
+
+float COA = 687.6728;
+float COB = -4.298927;
+
+float A = CO2A;
+float B = CO2B;
 float R0 = 0.0;
 float filtData = 0.0;
 float k = 0.005;
 bool isHeating = false;
 bool isCalibrating = false;
-int mode = 0;
+int mode = 0;  // 0 - CO2; 1 - Smoke
 float brightness = 1.0;
 int updatePeriod = 1000;
 int pointPos = 0;
@@ -96,6 +102,7 @@ void loop() {
       Serial.print("R0: ");
       Serial.println(R0);
       EEPROM.put(R0_EEPROM_ADDR, R0);
+      calCount = 0;
       isCalibrating = false;
       setColor(0, 0, 0);
       disp.clear();
@@ -110,8 +117,14 @@ void loop() {
     if (millis() - tmr2 >= updatePeriod) {
       tmr2 = millis();
 
-      displayPPM(filtData);
+      if (mode == 0) {
+        displayPPM(filtData);
+      } else if (mode == 1) {
+        displayState(filtData);
+      }
 
+      Serial.print(getRS());
+      Serial.print(",");
       Serial.print(getPPM());
       Serial.print(",");
       Serial.println(filtData);
@@ -148,18 +161,15 @@ void startCalibrating() {
 void changeMode() {
   if (mode == 0) {
     mode = 1;
-    brightness = 0.8;
-    updatePeriod = 3000;
-    displayPPM(filtData);
+    A = COA;
+    B = COB;
+    filtData = 0.0;
+    displayState(filtData);
   } else if (mode == 1) {
-    mode = 2;
-    brightness = 0.5;
-    updatePeriod = 5000;
-    displayPPM(filtData);
-  } else if (mode == 2) {
     mode = 0;
-    brightness = 1.0;
-    updatePeriod = 1000;
+    A = CO2A;
+    B = CO2B;
+    filtData = 0.0;
     displayPPM(filtData);
   }
 }
@@ -169,12 +179,28 @@ void displayPPM(float val) {
   else if (val <= 1000) setColor(255, 255, 0);  // yellow
   else setColor(255, 0, 0);                     // red
 
-  if (int(val) > 9999){
+  if (int(val) > 9999) {
     disp.displayInt(9999);
   } else if (int(val) < 0) {
     disp.displayInt(0);
   } else {
     disp.displayInt(int(val));
+  }
+}
+
+void displayState(float val) {
+  if (val <= 60000) {
+    setColor(0, 255, 0);  // green
+
+    disp.clear();
+    uint8_t NO[] = { _N, _O, };
+    disp.displayBytes(NO, sizeof(NO));
+  } else {
+    setColor(255, 0, 0);  // red
+
+    disp.clear();
+    uint8_t YES[] = { _Y, _E, _S, };
+    disp.displayBytes(YES, sizeof(YES));
   }
 }
 
